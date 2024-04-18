@@ -71,3 +71,73 @@ resource "aws_db_instance" "databasewp" {
   publicly_accessible    = false
   storage_type           = "gp2"
 }
+
+
+# Creating Load Balancer Target Group
+resource "aws_lb_target_group" "lb-tg" {
+  name_prefix = "capstone_lb-tg"  
+  port        = 80
+  protocol    = "HTTP"
+  vpc_id      = "vpc-id-placeholder"  
+
+  health_check {
+    interval            = 60
+    path                = "/indextest.html"
+    port                = 80
+    protocol            = "HTTP"
+    timeout             = 30
+    healthy_threshold   = 3
+    unhealthy_threshold = 5
+  }
+}
+
+# Creating Load Balancer Target Group Attachment
+resource "aws_lb_target_group_attachment" "tg_att" {
+  target_group_arn = aws_lb_target_group.lb-tg.arn  
+  target_id        = "instance-id-placeholder"
+  port             = 80
+}
+
+# Creating Application Load Balancer
+resource "aws_lb" "alb" {
+  name                       = "capstone-alb"
+  internal                   = false
+  load_balancer_type         = "application"
+  security_groups            = ["security-group-placeholder"]
+  subnets                    = ["subnet-placeholder-1", "subnet-placeholder-2"]
+  enable_deletion_protection = false
+
+  access_logs {
+    bucket  = "s3-bucket-placeholder"
+    prefix  = "lb-logs"
+    enabled = true
+  }
+    tags = {
+      Name = "${capstone.lb}-alb"
+  }
+}
+
+# Creating Load Balancer Listener for http
+resource "aws_lb_listener" "capstone_lb_listener" {
+  load_balancer_arn = aws_lb_alb.arn   
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.lb-tg.arn   
+  }
+}
+
+# Adding ELB to route 53 domain 
+resource "aws_route53_record" "elb_dns_record" {
+  zone_id = "zone_id_placeholder"  
+  name    = "placeholder.com"              
+  type    = "A"
+
+  alias {
+    name                   = "alb_dns_name_placeholder"  
+    zone_id                = "alb_zone_id_placeholder"  
+    evaluate_target_health = false
+  }
+}

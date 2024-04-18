@@ -1,8 +1,10 @@
 variable "region" {
-    default = "eu-west-3"
+  default = "eu-west-3"
 }
 variable "profile" {
     default = "set19"
+}
+variable "red-hat" {
 }
 variable "vpc_cidr" {}
 variable "pubs1_cidr" {}

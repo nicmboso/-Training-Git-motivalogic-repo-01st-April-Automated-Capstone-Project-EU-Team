@@ -45,6 +45,25 @@ resource "aws_s3_bucket" "capstone-code-bucket" {
   }
 }
 
+
+# Create bucket for logging
+resource "aws_s3_bucket" "log_bucket" {
+  bucket = "capstone-log-bucket"
+}
+
+resource "aws_s3_bucket_acl" "log_bucket_acl" {
+  bucket = aws_s3_bucket.log_bucket.id
+  acl    = "log-delivery-write"
+}
+
+resource "aws_s3_bucket_logging" "capstone-media-bucket" {
+  bucket = aws_s3_bucket.capstone-media-bucket.id
+
+  target_bucket = aws_s3_bucket.log_bucket.id
+  target_prefix = "log/"
+}
+
+
 resource "aws_db_subnet_group" "my_db_subnet_group" {
   name       = "capstone-db-subnet-group"
   subnet_ids = ["subnet-xxxxxxxxxxxxxxxxx", "subnet-yyyyyyyyyyyyyyyyy"]

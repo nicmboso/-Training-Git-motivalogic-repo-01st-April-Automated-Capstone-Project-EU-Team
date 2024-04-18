@@ -1,4 +1,5 @@
 
+# creating vpc
 resource "aws_vpc" "vpc" {
     cidr_block =  var.vpc_cidr
     instance_tenancy = "default"
@@ -43,7 +44,7 @@ resource "aws_subnet" "private-subnet1" {
 
 #private subnet 2
 resource "aws_subnet" "private-subnet2" {
-    vpc_id      = aws_vpc.vpc_id
+    vpc_id      = aws_vpc.vpc.id
     cidr_block  = var.priv2_cidr
     availability_zone = var.avz2
 
@@ -52,6 +53,7 @@ resource "aws_subnet" "private-subnet2" {
     }
 }
 
+# Internet gateway
 resource "aws_internet_gateway" "igw" {
     vpc_id = aws_vpc.vpc.id
 
@@ -60,24 +62,142 @@ resource "aws_internet_gateway" "igw" {
     }
 }
 
+# Elastic ip
 resource "aws_eip" "eip" {
-    depends_on = [ aws_internet_gateway.igw ]
+    depends_on = [aws_internet_gateway.igw]
     domain     = "vpc"
 }
 
+# Nat gateway
 resource "aws_nat_gateway" "ngw" {
     allocation_id = aws_eip.eip.id
     subnet_id = aws_subnet.public-subnet1.id
-    depends_on = [ aws_internet_gateway.igw ]
+    depends_on = [aws_internet_gateway.igw]
 
     tags = {
-      Name = "${local.name}-nat gw"
+      Name = "${local.name}-nat-gw"
     }
 }
-provider "aws" {
-  region = "eu-west-3"
+
+#public route table
+resource "aws_route_table" "pub-rt" {
+  vpc_id = aws_vpc.vpc.id
+
+  route {
+    cidr_block = var.cidr_all 
+    gateway_id = aws_internet_gateway.igw.id
+  }
+
+  tags = {
+    Name = "${local.name}-pub-rt"
+  }
 }
 
+#private route table
+resource "aws_route_table" "priv-rt" {
+  vpc_id = aws_vpc.vpc.id
+
+  route {
+    cidr_block = var.cidr_all 
+    gateway_id = aws_nat_gateway.ngw.id
+  }
+
+  tags = {
+    Name = "${local.name}-priv-rt"
+  }
+}
+
+#Route table associations
+resource "aws_route_table_association" "rta-pub1" {
+  subnet_id      = aws_subnet.public-subnet1.id
+  route_table_id = aws_route_table.pub-rt.id
+}
+
+resource "aws_route_table_association" "rta-pub2" {
+  subnet_id      = aws_subnet.public-subnet2.id
+  route_table_id = aws_route_table.pub-rt.id
+}
+
+resource "aws_route_table_association" "rta-priv1" {
+  subnet_id      = aws_subnet.private-subnet1.id
+  route_table_id = aws_route_table.priv-rt.id
+}
+
+resource "aws_route_table_association" "rta-priv2" {
+  subnet_id      = aws_subnet.private-subnet2.id
+  route_table_id = aws_route_table.priv-rt.id
+}
+
+#Creating security group
+resource "aws_security_group" "frontend-sg" {
+  name        = "frontend-sg"
+  description = "frontend security group"
+  vpc_id      = aws_vpc.vpc.id
+  ingress {
+    description = "ssh port"
+    from_port = var.ssh-port
+    to_port = var.ssh-port
+    protocol = "tcp"
+    cidr_blocks = [var.cidr_all]
+  } 
+  ingress {
+    description = "http port"
+    from_port = var.http-port
+    to_port = var.http-port
+    protocol = "tcp"
+    cidr_blocks = [var.cidr_all]
+  }
+  egress {
+    from_port = 0
+    to_port = 0
+    protocol = "-1"
+    cidr_blocks = [var.cidr_all]
+  } 
+  tags = {
+    Name = "${local.name}-frontend-sg"
+  }
+}
+
+resource "aws_security_group" "backend-sg" {
+  name        = "backend-sg"
+  description = "backend security group"
+  vpc_id      = aws_vpc.vpc.id
+  ingress {
+    description = "mysql port"
+    from_port = var.mysql-port
+    to_port = var.mysql-port
+    protocol = "tcp"
+    cidr_blocks = [var.pubs1_cidr,var.pubs2_cidr]
+  } 
+  egress {
+    from_port = 0
+    to_port = 0
+    protocol = "-1"
+    cidr_blocks = [var.cidr_all]
+  } 
+  tags = {
+    Name = "${local.name}-backend-sg"
+  }
+}
+
+# dynamic keypair resource
+resource "tls_private_key" "keypair" {
+  algorithm = "RSA"
+  rsa_bits = 4096  
+}
+
+resource "local_file" "private_key" {
+  content = tls_private_key.keypair.private_key_pem
+  filename = "capstone-private-key"
+  file_permission = "600"  
+}
+
+resource "aws_key_pair" "public_key" {
+  key_name = "capstone-public-key"
+  public_key = tls_private_key.keypair.public_key_openssh  
+}
+
+# Creating media bucket
 resource "aws_s3_bucket" "capstone-media-bucket" {
   bucket        = "capstone-media-bucket"
   force_destroy = true
@@ -85,25 +205,30 @@ resource "aws_s3_bucket" "capstone-media-bucket" {
     Name = "${local.name}-media-bucket"
   }
 }
+
+data "aws_iam_policy_document" "media-bucket-access-policy" {
+  statement {
+    principals {
+      type = "AWS"
+      identifiers = ["*"]
+    }
+    actions = [
+      "s3:GetObject",
+      "s3:ListBucket",
+      "s3:GetObjectVersion"
+    ]
+    resources = [
+      aws_s3_bucket.capstone-media-bucket.arn,
+      "${aws_s3_bucket.capstone-media-bucket.arn}/*",
+    ]
+  }  
+}
+
 resource "aws_s3_bucket_policy" "capstone-media-bucket-policy" {
   bucket = aws_s3_bucket.capstone-media-bucket.id
+  policy = data.aws_iam_policy_document.media-bucket-access-policy.json 
 
-  policy = jsonencode({
-    "Version" : "2012-10-17",
-    "Statement" : [
-      {
-        "Sid" : "PublicReadGetObject",
-        "Effect" : "Allow",
-        "Principal" : "*",
-        "Action" : [
-          "s3:GetObject"
-        ],
-        "Resource" : [
-          "arn:aws:s3:::capstone-media-bucket.arn/*"
-        ]
-      }
-    ]
-  })
+  
 }
 resource "aws_s3_bucket_public_access_block" "media_bucket_access_block" {
   bucket = aws_s3_bucket.capstone-media-bucket.id

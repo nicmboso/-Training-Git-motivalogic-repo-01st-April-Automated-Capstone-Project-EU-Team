@@ -227,9 +227,9 @@ data "aws_iam_policy_document" "media-bucket-access-policy" {
 resource "aws_s3_bucket_policy" "capstone-media-bucket-policy" {
   bucket = aws_s3_bucket.capstone-media-bucket.id
   policy = data.aws_iam_policy_document.media-bucket-access-policy.json 
-
   
 }
+
 resource "aws_s3_bucket_public_access_block" "media_bucket_access_block" {
   bucket = aws_s3_bucket.capstone-media-bucket.id
 
@@ -248,20 +248,46 @@ resource "aws_s3_bucket" "capstone-code-bucket" {
 
 
 # Create bucket for logging
-resource "aws_s3_bucket" "log_bucket" {
+resource "aws_s3_bucket" "capstone-log-bucket" {
   bucket = "capstone-log-bucket"
+  force_destroy = true
 }
 
 resource "aws_s3_bucket_acl" "log_bucket_acl" {
-  bucket = aws_s3_bucket.log_bucket.id
+  bucket = aws_s3_bucket.capstone-log-bucket.id
   acl    = "log-delivery-write"
 }
 
 resource "aws_s3_bucket_logging" "capstone-media-bucket" {
   bucket = aws_s3_bucket.capstone-media-bucket.id
 
-  target_bucket = aws_s3_bucket.log_bucket.id
+  target_bucket = aws_s3_bucket.capstone-log-bucket.id
   target_prefix = "log/"
+}
+
+# Creating log bucket policy
+data "aws_iam_policy_document" "log-bucket-access-policy" {
+  statement {
+    principals {
+      type = "AWS"
+      identifiers = ["*"]
+    }
+    actions = [
+      "s3:GetObject",
+      "s3:ListBucket",
+      "s3:GetObjectVersion"
+    ]
+    resources = [
+      aws_s3_bucket.capstone-log-bucket.arn,
+      "${aws_s3_bucket.capstone-log-bucket.arn}/*",
+    ]
+  }  
+}
+
+resource "aws_s3_bucket_policy" "capstone-log-bucket-policy" {
+  bucket = aws_s3_bucket.capstone-log-bucket.id
+  policy = data.aws_iam_policy_document.log-bucket-access-policy.json 
+    
 }
 
 

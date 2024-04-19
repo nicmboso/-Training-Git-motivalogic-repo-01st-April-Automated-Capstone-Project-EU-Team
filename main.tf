@@ -358,6 +358,8 @@ resource "aws_route53_record" "elb_dns_record" {
     name                   = "alb_dns_name_placeholder"  
     zone_id                = "alb_zone_id_placeholder"  
     evaluate_target_health = false
+  }
+}
     
 # Create an AMI from the instance
 resource "aws_ami_from_instance" "capstone_ami" {
@@ -398,5 +400,70 @@ resource "aws_autoscaling_policy" "target_tracking_scale_out" {
       predefined_metric_type = "ASGAverageCPUUtilization"  
     }
     target_value = 50  
+  }
+}
+
+resource "aws_cloudwatch_dashboard" "asg_dashboard" {
+  dashboard_name = "ASG_Dashboard"
+
+  dashboard_body = jsonencode({
+    widgets: [
+      {
+        type: "text",
+        x: 0,
+        y: 0,
+        width: 24,
+        height: 1,
+        properties: {
+          markdown: "## Auto Scaling Group Dashboard"
+        }
+      },
+      {
+        type: "metric",
+        x: 0,
+        y: 1,
+        width: 24,
+        height: 6,
+        properties: {
+          title: "ASG Metrics",
+          view: "timeSeries",
+          stacked: false,
+          region: "eu-west-3",  
+          period: 300,
+          yAxis: {
+            left: {
+              min: 0
+            }
+          },
+          metrics: [
+            {
+              id: "m1",
+              label: "CPU Utilization",
+              metric: ["AWS/AutoScaling", "CPUUtilization"],
+              visible: true,
+              statistic: "Average",
+              dimensions: {
+                AutoScalingGroupName: aws_autoscaling_group.capstone_asg.name
+              }
+            }
+          ]
+        }
+      }
+    ]
+  })
+}
+resource "aws_cloudwatch_metric_alarm" "asg_cpu_utilization_alarm" {
+  alarm_name          = "ASG_CPU_Utilization_Alarm"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = 2
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = 300
+  statistic           = "Average"
+  threshold           = 50
+  alarm_description   = "This alarm will trigger if CPU utilization is greater than or equal to 50% for 2 consecutive periods."
+  alarm_actions       = [aws_autoscaling_policy.target_tracking_scale_out.arn]  
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.capstone_asg.name
   }
 }

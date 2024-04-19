@@ -4,6 +4,7 @@ variable "region" {
 variable "profile" {
     default = "set19"
 }
+
 variable "vpc_cidr" {}
 variable "pubs1_cidr" {}
 variable "avz1" {}

@@ -1,3 +1,5 @@
+
+# creating vpc
 resource "aws_vpc" "vpc" {
     cidr_block =  var.vpc_cidr
     instance_tenancy = "default"
@@ -42,7 +44,7 @@ resource "aws_subnet" "private-subnet1" {
 
 #private subnet 2
 resource "aws_subnet" "private-subnet2" {
-    vpc_id      = aws_vpc.vpc_id
+    vpc_id      = aws_vpc.vpc.id
     cidr_block  = var.priv2_cidr
     availability_zone = var.avz2
 
@@ -51,6 +53,7 @@ resource "aws_subnet" "private-subnet2" {
     }
 }
 
+# Internet gateway
 resource "aws_internet_gateway" "igw" {
     vpc_id = aws_vpc.vpc.id
 
@@ -59,22 +62,22 @@ resource "aws_internet_gateway" "igw" {
     }
 }
 
+# Elastic ip
 resource "aws_eip" "eip" {
-    depends_on = [ aws_internet_gateway.igw ]
+    depends_on = [aws_internet_gateway.igw]
     domain     = "vpc"
 }
 
+# Nat gateway
 resource "aws_nat_gateway" "ngw" {
     allocation_id = aws_eip.eip.id
     subnet_id = aws_subnet.public-subnet1.id
-    depends_on = [ aws_internet_gateway.igw ]
+    depends_on = [aws_internet_gateway.igw]
 
     tags = {
-      Name = "${local.name}-nat gw"
+      Name = "${local.name}-nat-gw"
     }
 }
-
-
 #create sns topic
 resource "aws_sns_topic" "user_updates" {
   name            = "user-updates-topic"
@@ -102,5 +105,5 @@ EOF
 resource "aws_sns_topic_subscription" "user_updates_email_target" {
   topic_arn = aws_sns_topic.user_updates.arn
   protocol  = "email"
-  endpoint  = email@example.com
+  endpoint  =  "akintoyelayo@gmail.com"
 }

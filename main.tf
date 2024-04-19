@@ -1,4 +1,3 @@
-
 # creating vpc
 resource "aws_vpc" "vpc" {
     cidr_block =  var.vpc_cidr
@@ -227,7 +226,6 @@ data "aws_iam_policy_document" "media-bucket-access-policy" {
 resource "aws_s3_bucket_policy" "capstone-media-bucket-policy" {
   bucket = aws_s3_bucket.capstone-media-bucket.id
   policy = data.aws_iam_policy_document.media-bucket-access-policy.json 
-  
 }
 
 resource "aws_s3_bucket_public_access_block" "media_bucket_access_block" {
@@ -267,12 +265,12 @@ resource "aws_s3_bucket_ownership_controls" "log_bucket_owner" {
     object_ownership = "BucketOwnerPreferred"
   }
 }
-resource "aws_s3_bucket_logging" "capstone-media-bucket" {
-  bucket = aws_s3_bucket.capstone-media-bucket.id
+# resource "aws_s3_bucket_logging" "capstone-media-bucket" {
+#   bucket = aws_s3_bucket.capstone-media-bucket.id
 
-  target_bucket = aws_s3_bucket.capstone-log-bucket.id
-  target_prefix = "log/"
-}
+#   target_bucket = aws_s3_bucket.capstone-log-bucket.id
+#   target_prefix = "log/"
+# }
 
 # Creating log bucket policy
 data "aws_iam_policy_document" "log-bucket-access-policy" {
@@ -307,6 +305,54 @@ resource "aws_s3_bucket_public_access_block" "log_bucket_access_block" {
   restrict_public_buckets = false
 }
 
+
+#Create IAM role 
+resource "aws_iam_role" "iam_role" {
+  name = "${local.name}-iam_role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Sid    = ""
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      },
+    ]
+  })
+  tags = {
+    tag-key = "iam_role"
+  }
+}
+
+#Create media-bucket IAM policy 
+resource "aws_iam_policy" "s3-policy" {
+  name = "${local.name}-s3-policy"
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action   = ["s3:*"]
+        Resource = "*"
+        Effect   = "Allow"
+      },
+    ]
+  })
+}
+
+#Attaching IAM_role_policy to s3 media-bucket policy
+resource "aws_iam_role_policy_attachment" "iam-role-attached-mediabucket" {
+  role       = aws_iam_role.iam_role.name
+  policy_arn = aws_iam_policy.s3-policy.arn
+}
+
+resource "aws_iam_instance_profile" "iam-instance-profile" {
+  name = "${local.name}-instance-profile"
+  role = aws_iam_role.iam_role.name
+}
+
 resource "aws_db_subnet_group" "my_db_subnet_group" {
   name       = "capstone-db-subnet-group"
   subnet_ids =[aws_subnet.private-subnet1.id, aws_subnet.private-subnet2.id]
@@ -315,8 +361,6 @@ resource "aws_db_subnet_group" "my_db_subnet_group" {
     Name = "${local.name}-db-sg"
   }
 }
-
-
 resource "aws_db_instance" "databasewp" {
   identifier             = var.db-identifier
   db_subnet_group_name   = aws_db_subnet_group.my_db_subnet_group.name
@@ -339,6 +383,7 @@ resource "aws_instance" "EC2-webserver" {
   subnet_id     = aws_subnet.public-subnet1.id
   vpc_security_group_ids = [aws_security_group.frontend-sg.id, aws_security_group.backend-sg.id]
   associate_public_ip_address = true
+  iam_instance_profile = aws_iam_instance_profile.iam-instance-profile.id
   key_name                    = aws_key_pair.public_key.key_name
   tags = {
     Name = "${loca.name}-webserver"
@@ -554,7 +599,7 @@ resource "aws_cloudwatch_metric_alarm" "asg_cpu_utilization_alarm" {
 }
 # Create Cloudfront distribution
 locals {
-  s3_origin_id = local.s3_origin_id
+  s3_origin_id = aws_s3_bucket.capstone-media-bucket.id
 }
 resource "aws_cloudfront_distribution" "s3_distribution" {
   origin {
@@ -565,7 +610,7 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
 
   logging_config {
     include_cookies = false
-    bucket          = "acp-logbucket"
+    bucket          = "capstone-log-bucket.s3.amazon.com"
     prefix          = "cloudfront-logs"
   }
 
@@ -629,5 +674,7 @@ EOF
 # sns topic subcription
 resource "aws_sns_topic_subscription" "user_updates_email_target" {
   topic_arn = aws_sns_topic.user_updates.arn
+  count = length(local.emails)
   protocol  = "email"
-  endpoint  =  "akintoyelayo@gmail.com"
+  endpoint  =  local.emails[count.index]
+}

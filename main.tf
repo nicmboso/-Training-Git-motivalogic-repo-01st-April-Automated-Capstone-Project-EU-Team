@@ -227,9 +227,9 @@ data "aws_iam_policy_document" "media-bucket-access-policy" {
 resource "aws_s3_bucket_policy" "capstone-media-bucket-policy" {
   bucket = aws_s3_bucket.capstone-media-bucket.id
   policy = data.aws_iam_policy_document.media-bucket-access-policy.json 
-
   
 }
+
 resource "aws_s3_bucket_public_access_block" "media_bucket_access_block" {
   bucket = aws_s3_bucket.capstone-media-bucket.id
 
@@ -248,20 +248,46 @@ resource "aws_s3_bucket" "capstone-code-bucket" {
 
 
 # Create bucket for logging
-resource "aws_s3_bucket" "log_bucket" {
+resource "aws_s3_bucket" "capstone-log-bucket" {
   bucket = "capstone-log-bucket"
+  force_destroy = true
 }
 
 resource "aws_s3_bucket_acl" "log_bucket_acl" {
-  bucket = aws_s3_bucket.log_bucket.id
+  bucket = aws_s3_bucket.capstone-log-bucket.id
   acl    = "log-delivery-write"
 }
 
 resource "aws_s3_bucket_logging" "capstone-media-bucket" {
   bucket = aws_s3_bucket.capstone-media-bucket.id
 
-  target_bucket = aws_s3_bucket.log_bucket.id
+  target_bucket = aws_s3_bucket.capstone-log-bucket.id
   target_prefix = "log/"
+}
+
+# Creating log bucket policy
+data "aws_iam_policy_document" "log-bucket-access-policy" {
+  statement {
+    principals {
+      type = "AWS"
+      identifiers = ["*"]
+    }
+    actions = [
+      "s3:GetObject",
+      "s3:ListBucket",
+      "s3:GetObjectVersion"
+    ]
+    resources = [
+      aws_s3_bucket.capstone-log-bucket.arn,
+      "${aws_s3_bucket.capstone-log-bucket.arn}/*",
+    ]
+  }  
+}
+
+resource "aws_s3_bucket_policy" "capstone-log-bucket-policy" {
+  bucket = aws_s3_bucket.capstone-log-bucket.id
+  policy = data.aws_iam_policy_document.log-bucket-access-policy.json 
+
 }
 
 
@@ -359,6 +385,38 @@ resource "aws_route53_record" "elb_dns_record" {
     zone_id                = "alb_zone_id_placeholder"  
     evaluate_target_health = false
   }
+}
+
+# Creating Route53 hosted zone
+resource "aws_route53_zone" "capstone_zone" {
+  name = "capstone-zone.com"      # replace with your desired zone name
+
+  vpc {
+    vpc_id = "vpc-000000000000"      # replace with your VPC id
+  }
+
+  tags = {
+    Environment = "test"
+    Name        = "capstone-zone"
+  }
+}
+
+output "name_servers" {
+  description = "The name servers for our zone"
+  value       = aws_route53_zone.capstone_zone.name_servers
+}
+
+# Creating Route53 A record
+resource "aws_route53_zone" "capstone_zone" {
+  name = "capstonedomain.com"
+}
+
+resource "aws_route53_record" "www_mydomain_com" {
+  zone_id = "${aws_route53_zone.capstone_zone.zone_id}"
+  name    = "www.capstonedomain.com"
+  type    = "A"
+  ttl     = "300"
+  records = ["192.0.2.44"]  # public ip of instance
 }
     
 # Create an AMI from the instance
@@ -466,4 +524,55 @@ resource "aws_cloudwatch_metric_alarm" "asg_cpu_utilization_alarm" {
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.capstone_asg.name
   }
+}
+# Create Cloudfront distribution
+locals {
+  s3_origin_id = local.s3_origin_id
+}
+resource "aws_cloudfront_distribution" "s3_distribution" {
+  origin {
+    domain_name = aws_s3_bucket.capstone-media-bucket.bucket_regional_domain_name
+    origin_id   = local.s3_origin_id
+  }
+  enabled = true
+
+  logging_config {
+    include_cookies = false
+    bucket          = "acp-logbucket"
+    prefix          = "cloudfront-logs"
+  }
+
+  default_cache_behavior {
+    allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods   = ["GET", "HEAD"]
+    target_origin_id = local.s3_origin_id
+
+    forwarded_values {
+      query_string = false
+
+      cookies {
+        forward = "none"
+      }
+    }
+
+    viewer_protocol_policy = "allow-all"
+    min_ttl                = 0
+    default_ttl            = 3600
+    max_ttl                = 86400
+  }
+
+  price_class = "PriceClass_All"
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+
+  viewer_certificate {
+    cloudfront_default_certificate = true
+  }
+}
+data "aws_cloudfront_distribution" "cloudfront" {
+  id = aws_cloudfront_distribution.s3_distribution.id
 }

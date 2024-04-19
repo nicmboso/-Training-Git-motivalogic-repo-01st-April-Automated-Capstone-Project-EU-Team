@@ -400,3 +400,55 @@ resource "aws_autoscaling_policy" "target_tracking_scale_out" {
     target_value = 50  
   }
 }
+
+# Create Cloudfront distribution
+locals {
+  s3_origin_id = "aws_s3_bucket.mediabucket.id"
+}
+resource "aws_cloudfront_distribution" "s3_distribution" {
+  origin {
+    domain_name = aws_s3_bucket.mediabucket.bucket_domain_name
+    origin_id   = local.s3_origin_id
+  }
+  enabled = true
+
+  logging_config {
+    include_cookies = false
+    bucket          = "acp-logbucket"
+    prefix          = "cloudfront-logs"
+  }
+
+  default_cache_behavior {
+    allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods   = ["GET", "HEAD"]
+    target_origin_id = local.s3_origin_id
+
+    forwarded_values {
+      query_string = false
+
+      cookies {
+        forward = "none"
+      }
+    }
+
+    viewer_protocol_policy = "allow-all"
+    min_ttl                = 0
+    default_ttl            = 3600
+    max_ttl                = 86400
+  }
+
+  price_class = "PriceClass_All"
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+
+  viewer_certificate {
+    cloudfront_default_certificate = true
+  }
+}
+data "aws_cloudfront_distribution" "cloudfront" {
+  id = aws_cloudfront_distribution.s3_distribution.id
+}

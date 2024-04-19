@@ -251,13 +251,22 @@ resource "aws_s3_bucket" "capstone-code-bucket" {
 resource "aws_s3_bucket" "capstone-log-bucket" {
   bucket = "capstone-log-bucket"
   force_destroy = true
+  tags = {
+    Name = "${local.name}-log-bucket"
+  }
 }
 
 resource "aws_s3_bucket_acl" "log_bucket_acl" {
+  depends_on = [aws_s3_bucket_ownership_controls.log_bucket_owner]
   bucket = aws_s3_bucket.capstone-log-bucket.id
-  acl    = "log-delivery-write"
+  acl    = "private"
 }
-
+resource "aws_s3_bucket_ownership_controls" "log_bucket_owner" {
+  bucket = aws_s3_bucket.capstone-log-bucket
+  rule {
+    object_ownership = "BucketOwnerPreferred"
+  }
+}
 resource "aws_s3_bucket_logging" "capstone-media-bucket" {
   bucket = aws_s3_bucket.capstone-media-bucket.id
 
@@ -274,8 +283,9 @@ data "aws_iam_policy_document" "log-bucket-access-policy" {
     }
     actions = [
       "s3:GetObject",
-      "s3:ListBucket",
-      "s3:GetObjectVersion"
+      "s3:GetBucketAcl",
+      "s3:PutBucketAcl",
+      "s3:PutObject"
     ]
     resources = [
       aws_s3_bucket.capstone-log-bucket.arn,
@@ -287,43 +297,60 @@ data "aws_iam_policy_document" "log-bucket-access-policy" {
 resource "aws_s3_bucket_policy" "capstone-log-bucket-policy" {
   bucket = aws_s3_bucket.capstone-log-bucket.id
   policy = data.aws_iam_policy_document.log-bucket-access-policy.json 
-
 }
+resource "aws_s3_bucket_public_access_block" "log_bucket_access_block" {
+  bucket = aws_s3_bucket.capstone-log-bucket.id
 
+  block_public_acls       = false
+  ignore_public_acls      = false
+  block_public_policy     = false
+  restrict_public_buckets = false
+}
 
 resource "aws_db_subnet_group" "my_db_subnet_group" {
   name       = "capstone-db-subnet-group"
-  subnet_ids = ["subnet-xxxxxxxxxxxxxxxxx", "subnet-yyyyyyyyyyyyyyyyy"]
+  subnet_ids =[aws_subnet.private-subnet1.id, aws_subnet.private-subnet2.id]
 
   tags = {
-    Name = "${local.name}-DB Subnet Group"
+    Name = "${local.name}-db-sg"
   }
 }
 
 
 resource "aws_db_instance" "databasewp" {
-  identifier             = var.identifier
-  db_subnet_group_name   = aws_db_subnet_group.capstone_database
+  identifier             = var.db-identifier
+  db_subnet_group_name   = aws_db_subnet_group.my_db_subnet_group.name
   vpc_security_group_ids = [aws_security_group.backend.id]
   allocated_storage      = 10
-  db_name                = capstone_database    
+  db_name                = var.db-name   
   engine                 = "mysql"
   engine_version         = "5.7"
   instance_class         = "db.t3.micro"
-  username               = "admin"
-  password               = "admin123"
+  username               = var.db-username
+  password               = var.db-password
   parameter_group_name   = "default.mysql5.7"
   skip_final_snapshot    = true
   publicly_accessible    = false
   storage_type           = "gp2"
 }
+resource "aws_instance" "EC2-webserver" {
+  ami           = var.red-hat
+  instance_type = "t2.micro"
+  subnet_id     = aws_subnet.public-subnet1.id
+  vpc_security_group_ids = [aws_security_group.frontend-sg.id, aws_security_group.backend-sg.id]
+  associate_public_ip_address = true
+  key_name                    = aws_key_pair.public_key.key_name
+  tags = {
+    Name = "${loca.name}-webserver"
+  }
+}
 
 # Creating Load Balancer Target Group
 resource "aws_lb_target_group" "lb-tg" {
-  name_prefix = "capstone_lb-tg"  
+  name_prefix = "lb-tg"  
   port        = 80
   protocol    = "HTTP"
-  vpc_id      = "vpc-id-placeholder"  
+  vpc_id      = aws_vpc.vpc.id  
 
   health_check {
     interval            = 60
@@ -339,7 +366,7 @@ resource "aws_lb_target_group" "lb-tg" {
 # Creating Load Balancer Target Group Attachment
 resource "aws_lb_target_group_attachment" "tg_att" {
   target_group_arn = aws_lb_target_group.lb-tg.arn  
-  target_id        = "instance-id-placeholder"
+  target_id        = aws_instance.EC2-webserver.id
   port             = 80
 }
 
@@ -348,23 +375,23 @@ resource "aws_lb" "alb" {
   name                       = "capstone-alb"
   internal                   = false
   load_balancer_type         = "application"
-  security_groups            = ["security-group-placeholder"]
-  subnets                    = ["subnet-placeholder-1", "subnet-placeholder-2"]
+  security_groups            = [aws_security_group.frontend-sg.id]
+  subnets                    = [aws_subnet.public-subnet1.id, aws_subnet.public-subnet2.id]
   enable_deletion_protection = false
 
   access_logs {
-    bucket  = "s3-bucket-placeholder"
+    bucket  = aws_s3_bucket.capstone-log-bucket.id
     prefix  = "lb-logs"
     enabled = true
   }
     tags = {
-      Name = "${capstone.lb}-alb"
+      Name = "${local.name}-alb"
   }
 }
 
 # Creating Load Balancer Listener for http
 resource "aws_lb_listener" "capstone_lb_listener" {
-  load_balancer_arn = aws_lb_alb.arn   
+  load_balancer_arn = aws_lb.alb.arn 
   port              = "80"
   protocol          = "HTTP"
 

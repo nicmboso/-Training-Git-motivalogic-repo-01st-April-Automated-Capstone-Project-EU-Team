@@ -287,7 +287,7 @@ data "aws_iam_policy_document" "log-bucket-access-policy" {
 resource "aws_s3_bucket_policy" "capstone-log-bucket-policy" {
   bucket = aws_s3_bucket.capstone-log-bucket.id
   policy = data.aws_iam_policy_document.log-bucket-access-policy.json 
-    
+
 }
 
 
@@ -384,6 +384,39 @@ resource "aws_route53_record" "elb_dns_record" {
     name                   = "alb_dns_name_placeholder"  
     zone_id                = "alb_zone_id_placeholder"  
     evaluate_target_health = false
+
+# Creating Route53 hosted zone
+resource "aws_route53_zone" "capstone_zone" {
+  name = "capstone-zone.com"      # replace with your desired zone name
+
+  vpc {
+    vpc_id = "vpc-000000000000"      # replace with your VPC id
+  }
+
+  tags = {
+    Environment = "test"
+    Name        = "capstone-zone"
+  }
+}
+
+output "name_servers" {
+  description = "The name servers for our zone"
+  value       = aws_route53_zone.capstone_zone.name_servers
+}
+
+# Creating Route53 A record
+resource "aws_route53_zone" "capstone_zone" {
+  name = "capstonedomain.com"
+}
+
+resource "aws_route53_record" "www_mydomain_com" {
+  zone_id = "${aws_route53_zone.capstone_zone.zone_id}"
+  name    = "www.capstonedomain.com"
+  type    = "A"
+  ttl     = "300"
+  records = ["192.0.2.44"]  # public ip of instance
+}
+
     
 # Create an AMI from the instance
 resource "aws_ami_from_instance" "capstone_ami" {

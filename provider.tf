@@ -4,5 +4,6 @@ provider "aws" {
 }
 locals {
   name = "capstone"
+  emails  = []
 }
 

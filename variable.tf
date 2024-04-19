@@ -39,4 +39,15 @@ variable "http-port"{
 variable "mysql-port"{
   default = "3306"
 }
-
+variable "db-identifier" {
+  default = "wordpressdb"
+}
+variable "db-name" {
+  default = "capstonedb"
+}
+variable "db-username" {
+  default = "admin"
+}
+variable "db-password" {
+  default = "admin123"
+}

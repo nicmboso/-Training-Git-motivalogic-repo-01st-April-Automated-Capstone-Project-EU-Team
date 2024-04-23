@@ -1,9 +1,9 @@
 provider "aws" {
-  region = var.region
+  region  = var.region
   profile = var.profile
 }
 locals {
-  name = "capstone"
-  emails  = []
+  name   = "capstone"
+  emails = []
 }
 

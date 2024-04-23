@@ -2,9 +2,10 @@ variable "region" {
   default = "eu-west-3"
 }
 variable "profile" {
-    default = "set19"
+  default = "set19"
 }
 variable "red-hat" {
+  default = "ami-05f804247228852a3"
 }
 variable "vpc_cidr" {
   default = "10.0.0.0/16"
@@ -30,13 +31,13 @@ variable "priv2_cidr" {
 variable "cidr_all" {
   default = "0.0.0.0/0"
 }
-variable "ssh-port"{
+variable "ssh-port" {
   default = "22"
 }
-variable "http-port"{
+variable "http-port" {
   default = "80"
 }
-variable "mysql-port"{
+variable "mysql-port" {
   default = "3306"
 }
 variable "db-identifier" {
@@ -51,3 +52,7 @@ variable "db-username" {
 variable "db-password" {
   default = "admin123"
 }
+variable "instance-type" {
+  default = "t2.medium"
+}
+  

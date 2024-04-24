@@ -385,6 +385,7 @@ resource "aws_instance" "EC2-webserver" {
   associate_public_ip_address = true
   iam_instance_profile        = aws_iam_instance_profile.iam-instance-profile.id
   key_name                    = aws_key_pair.public_key.key_name
+  user_data = local.wordpress-user-data
   tags = {
     Name = "${local.name}-webserver"
   }
@@ -476,12 +477,13 @@ resource "time_sleep" "server-wait-time" {
 }
 resource "aws_launch_configuration" "capstone_launch_config" {
   name                        = "capstone-launch-config"
-  image_id                    = "capstone-ami"
+  image_id                    = aws_ami_from_instance.capstone-ami.id
   instance_type               = var.instance-type
   iam_instance_profile        = aws_iam_instance_profile.iam-instance-profile.id
   associate_public_ip_address = true
   security_groups             = [aws_security_group.frontend-sg.id]
   key_name                    = aws_key_pair.public_key.id
+  user_data = local.wordpress-user-data
 }
 
 resource "aws_autoscaling_group" "capstone_asg" {
@@ -502,7 +504,7 @@ resource "aws_autoscaling_group" "capstone_asg" {
 resource "aws_autoscaling_policy" "ASG-policy" {
   name                   = "ASG-policy"
   adjustment_type        = "ChangeInCapacity"
-  cooldown               = 300
+  policy_type            = "TargetTrackingScaling"
   autoscaling_group_name = aws_autoscaling_group.capstone_asg.name
 
   target_tracking_configuration {
@@ -561,14 +563,14 @@ locals {
 }
 resource "aws_cloudfront_distribution" "s3_distribution" {
   origin {
-    domain_name = aws_s3_bucket.capstone-media-bucket.bucket_domain_name
+    domain_name = aws_s3_bucket.capstone-media-bucket.bucket_regional_domain_name
     origin_id   = local.s3_origin_id
   }
   enabled = true
 
   logging_config {
     include_cookies = false
-    bucket          = "capstone-log-bucket.s3.amazon.com"
+    bucket          = "capstone-log-bucket.s3.amazonaws.com"
     prefix          = "cloudfront-logs"
   }
 

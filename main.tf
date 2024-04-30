@@ -61,11 +61,11 @@ resource "aws_internet_gateway" "igw" {
   }
 }
 
-# # Elastic ip
-# resource "aws_eip" "eip" {
-#   depends_on = [aws_internet_gateway.igw]
-#   domain     = "vpc"
-# }
+# Elastic ip
+resource "aws_eip" "eip" {
+  depends_on = [aws_internet_gateway.igw]
+  domain     = "vpc"
+}
 
 # Nat gateway
 resource "aws_nat_gateway" "ngw" {

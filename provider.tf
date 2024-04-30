@@ -4,6 +4,6 @@ provider "aws" {
 }
 locals {
   name   = "capstone"
-  emails = ["alangallagher219@gmail.com", "Akintoyelayo@gmail.com", "nora.kehinde@cloudhight.com", "nicholas.udomboso@cloudhight.com", "sammy.utere@cloudhight.com"]
+  emails = ["nicholas.udomboso@cloudhight.com"]
 }
 

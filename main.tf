@@ -361,6 +361,7 @@ resource "aws_db_subnet_group" "my_db_subnet_group" {
     Name = "${local.name}-db-sg"
   }
 }
+
 resource "aws_db_instance" "databasewp" {
   identifier             = var.db-identifier
   db_subnet_group_name   = aws_db_subnet_group.my_db_subnet_group.name
@@ -377,6 +378,8 @@ resource "aws_db_instance" "databasewp" {
   publicly_accessible    = false
   storage_type           = "gp2"
 }
+
+#EC2
 resource "aws_instance" "EC2-webserver" {
   ami                         = var.red-hat
   instance_type               = var.instance-type
@@ -446,11 +449,13 @@ resource "aws_lb_listener" "capstone_lb_listener" {
     target_group_arn = aws_lb_target_group.lb-tg.arn
   }
 }
+
 # Route 53 hosted zone
 data "aws_route53_zone" "caprt_zone" {
   name         = "unstoppablefunmie.com"
   private_zone = false
 }
+
 # Adding ELB to route 53 domain 
 resource "aws_route53_record" "elb_dns_record" {
   zone_id = data.aws_route53_zone.caprt_zone.zone_id
@@ -542,6 +547,7 @@ resource "aws_cloudwatch_dashboard" "asg_dashboard" {
     ]
   })
 }
+
 resource "aws_cloudwatch_metric_alarm" "asg_cpu_utilization_alarm" {
   alarm_name          = "ASG_CPU_Utilization_Alarm"
   comparison_operator = "GreaterThanOrEqualToThreshold"

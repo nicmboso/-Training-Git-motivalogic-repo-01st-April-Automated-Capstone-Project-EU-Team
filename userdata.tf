@@ -5,7 +5,7 @@ locals {
 sudo yum update -y
 sudo yum upgrade -y
 
-#Download and install AWS CLI
+##Download and install AWS CLI
 curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
 sudo yum install unzip -y
 unzip awscliv2.zip
